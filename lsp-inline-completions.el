@@ -94,12 +94,14 @@
   (and (overlayp lsp--inline-completion-overlay)
        (overlay-buffer lsp--inline-completion-overlay)))
 
-(defun lsp--inline-completion-get-overlay ()
+(defun lsp--inline-completion-get-overlay (beg end)
   "Build the suggestions overlay"
-  (unless (overlayp lsp--inline-completion-overlay)
-    (setq lsp--inline-completion-overlay (make-overlay 1 1 nil nil t))
-    (overlay-put lsp--inline-completion-overlay 'keymap lsp-inline-completion-active-map)
-    (overlay-put lsp--inline-completion-overlay 'priority 9000))
+  (when (overlayp lsp--inline-completion-overlay)
+    (lsp--inline-completion-clear-overlay))
+
+  (setq lsp--inline-completion-overlay (make-overlay beg end nil nil t))
+  (overlay-put lsp--inline-completion-overlay 'keymap lsp-inline-completion-active-map)
+  (overlay-put lsp--inline-completion-overlay 'priority 9000)
 
   lsp--inline-completion-overlay)
 
@@ -107,7 +109,9 @@
 (defun lsp--inline-completion-clear-overlay ()
   "Hide the suggestion overlay"
   (when (lsp--inline-completion-overlay-visible)
-    (delete-overlay lsp--inline-completion-overlay)))
+    (delete-overlay lsp--inline-completion-overlay))
+  (setq lsp--inline-completion-overlay nil)
+  )
 
 (defun lsp--inline-completion-show ()
   "Makes the suggestion overlay visible"
@@ -120,16 +124,15 @@
          (text (cond
                 ((lsp-markup-content? insertText) (lsp:markup-content-value insertText))
                 (t insertText)))
-         (ov (lsp--inline-completion-get-overlay)))
+         (ov (lsp--inline-completion-get-overlay (point) (+ (point)
+                                                            (max 1 (length text)))))
+         (display-key (if (eolp) 'after-string 'display)))
     (message "Completion %d/%s"
              (1+ lsp--inline-completion-current)
              (length lsp--inline-completions))
-    ;; Move overlay in a way that it contains point
-    (move-overlay ov (point) (+ (point)
-                                (max 1 (length text) )))
-    (overlay-put ov 'display (concat
-                              (propertize text 'face 'lsp-inline-completion-overlay-face)
-                              tail))
+    (overlay-put ov display-key (concat
+                                 (propertize text 'face 'lsp-inline-completion-overlay-face)
+                                 tail))
     (overlay-put ov 'start (point))))
 
 (defun lsp-inline-completion-accept ()
