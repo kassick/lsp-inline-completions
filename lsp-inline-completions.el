@@ -137,9 +137,27 @@
                             (propertize text 'face 'lsp-inline-completion-overlay-face)))
           (ov (lsp--inline-completion-get-overlay  beg end-point)))
     (goto-char beg)
-    (message "Completion %d/%s"
-             (1+ lsp--inline-completion-current)
-             (length lsp--inline-completions))
+
+    (message (concat "Completion "
+                     (propertize (format "%d" (1+ lsp--inline-completion-current)) 'face 'bold)
+                     "/"
+                     (propertize (format "%d" (length lsp--inline-completions)) 'face 'bold)
+
+                     (-when-let (keys (where-is-internal #'lsp-inline-completion-next lsp-inline-completion-active-map))
+                       (concat ". "
+                               (propertize " Next" 'face 'italic)
+                               (format ": [%s]"
+                                       (string-join (--map (propertize (key-description it) 'face 'help-key-binding)
+                                                           keys)
+                                                    "/"))))
+                     (-when-let (keys (where-is-internal #'lsp-inline-completion-accept lsp-inline-completion-active-map))
+                       (concat (propertize " Accept" 'face 'italic)
+                               (format ": [%s]"
+                                       (string-join (--map (propertize (key-description it) 'face 'help-key-binding)
+                                                           keys)
+                                                    "/"))))))
+
+
     (put-text-property 0 1 'cursor t propertizedText)
     (overlay-put ov 'display (substring propertizedText 0 1))
     (overlay-put ov 'after-string (substring propertizedText 1))))
@@ -221,6 +239,7 @@
   (interactive)
   (unwind-protect
       (progn
+        (lsp--spinner-start)
         (run-hooks 'lsp-before-inline-completion-hook)
 
         (-when-let* ((trigger-kind (if implicit
@@ -249,6 +268,7 @@
             (message "No Suggestions!"))))
 
     ;; Clean-up
+    (lsp--spinner-stop)
     (run-hooks 'lsp-after-inline-completion-hook)))
 
 (provide 'lsp-inline-completions)
