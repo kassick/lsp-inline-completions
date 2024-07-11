@@ -76,6 +76,7 @@
 (defvar-local lsp--inline-completions nil "The completions provided by the server")
 (defvar-local lsp--inline-completion-current nil "The current suggestion to be displayed")
 (defvar-local lsp--inline-completion-overlay nil "The overlay displaying code suggestions")
+(defvar-local lsp--inline-completion-start-point nil "The point where the completion started")
 
 (defcustom lsp-before-inline-completion-hook nil
   "Hooks run before starting code suggestions"
@@ -116,30 +117,41 @@
 (defun lsp--inline-completion-show ()
   "Makes the suggestion overlay visible"
   (lsp--inline-completion-clear-overlay)
-  (let* ((tail (buffer-substring (point) (line-end-position)))
-         (suggestion
-          (elt lsp--inline-completions
-               lsp--inline-completion-current))
-         (insertText (lsp:inline-completion-item-insert-text suggestion))
-         (text (cond
-                ((lsp-markup-content? insertText) (lsp:markup-content-value insertText))
-                (t insertText)))
-         (ov (lsp--inline-completion-get-overlay (point) (+ (point)
-                                                            (max 1 (length text)))))
-         (display-key (if (eolp) 'after-string 'display)))
+  (-let* (
+          (suggestion
+           (elt lsp--inline-completions
+                lsp--inline-completion-current))
+          ((&InlineCompletionItem? :insert-text :filter-text? :range? :command?) suggestion)
+          ((&RangeToPoint :start :end) range?)
+          (start-point (or start (point)))
+          (showing-at-eol (save-excursion
+                            (goto-char start-point)
+                            (eolp)))
+          (beg (if showing-at-eol (1- start-point) start-point))
+          (end-point (max (or end (1+ beg))
+                          (+ beg (length insert-text))))
+          (text (cond
+                 ((lsp-markup-content? insert-text) (lsp:markup-content-value insert-text))
+                 (t insert-text)))
+          (propertizedText (propertize text 'face 'lsp-inline-completion-overlay-face))
+          (ov (lsp--inline-completion-get-overlay  beg end-point)))
+    (goto-char beg)
     (message "Completion %d/%s"
              (1+ lsp--inline-completion-current)
              (length lsp--inline-completions))
-    (overlay-put ov display-key (concat
-                                 (propertize text 'face 'lsp-inline-completion-overlay-face)
-                                 tail))
-    (overlay-put ov 'start (point))))
+    (put-text-property 0 1 'cursor t propertizedText)
+    (overlay-put ov 'display (substring propertizedText 0 1))
+    (overlay-put ov 'after-string (substring propertizedText 1))
+    ))
 
 (defun lsp-inline-completion-accept ()
   "Accepts the current suggestion"
   (interactive)
   (unless (lsp--inline-completion-overlay-visible)
     (error "Not showing suggestions"))
+
+  (when lsp--inline-completion-start-point
+    (goto-char lsp--inline-completion-start-point))
 
   (lsp--inline-completion-clear-overlay)
   (-let* ((start-point (point))
@@ -179,7 +191,10 @@
   (unless (lsp--inline-completion-overlay-visible)
     (error "Not showing suggestions"))
 
-  (lsp--inline-completion-clear-overlay))
+  (lsp--inline-completion-clear-overlay)
+
+  (when lsp--inline-completion-start-point
+    (goto-char lsp--inline-completion-start-point)))
 
 (defun lsp-inline-completion-next ()
   (interactive)
@@ -228,6 +243,7 @@
               (progn
                 (setq lsp--inline-completions items)
                 (setq lsp--inline-completion-current 0)
+                (setq lsp--inline-completion-start-point (point))
                 (lsp--inline-completion-show))
 
             (message "No Suggestions!"))))
