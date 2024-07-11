@@ -214,10 +214,16 @@
                      (args (plist-put (lsp--text-document-position-params)
                                       :context (ht ("triggerKind"  trigger-kind))))
                      (resp (lsp-request-while-no-input "textDocument/inlineCompletion" args))
-                     ;; TODO: Maybe declare an interface for this command?
-                     (items (cond
-                             ((lsp-inline-completion-list? resp) (lsp:inline-completion-list-items resp))
-                             (t resp))))
+                     ;; On multiple servers, the response may be a list!
+                     ;; With a single one, it is a hash table ...
+                     (resps (if (ht-p resp) (list resp) resp))
+                     (resp-items (--map (seq-into
+                                         (cond ((lsp-inline-completion-list? it)
+                                                (lsp:inline-completion-list-items it))
+                                               (t it))
+                                         'list)
+                                        resps))
+                     (items (apply 'append resp-items)))
           (if (> (length items) 0)
               (progn
                 (setq lsp--inline-completions items)
