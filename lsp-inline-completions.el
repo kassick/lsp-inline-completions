@@ -128,12 +128,13 @@
                             (goto-char start-point)
                             (eolp)))
           (beg (if showing-at-eol (1- start-point) start-point))
-          (end-point (max (or end (1+ beg))
-                          (+ beg (length insert-text))))
+          (end-point  (or end (1+ beg)))
           (text (cond
                  ((lsp-markup-content? insert-text) (lsp:markup-content-value insert-text))
                  (t insert-text)))
-          (propertizedText (propertize text 'face 'lsp-inline-completion-overlay-face))
+          (propertizedText (concat
+                            (buffer-substring beg start-point)
+                            (propertize text 'face 'lsp-inline-completion-overlay-face)))
           (ov (lsp--inline-completion-get-overlay  beg end-point)))
     (goto-char beg)
     (message "Completion %d/%s"
@@ -141,8 +142,7 @@
              (length lsp--inline-completions))
     (put-text-property 0 1 'cursor t propertizedText)
     (overlay-put ov 'display (substring propertizedText 0 1))
-    (overlay-put ov 'after-string (substring propertizedText 1))
-    ))
+    (overlay-put ov 'after-string (substring propertizedText 1))))
 
 (defun lsp-inline-completion-accept ()
   "Accepts the current suggestion"
